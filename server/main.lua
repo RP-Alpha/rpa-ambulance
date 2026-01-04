@@ -1,3 +1,6 @@
+-- RP-Alpha Ambulance/EMS - Server
+-- Uses rpa-lib permissions system
+
 local OnDuty = {}
 
 -- Get Framework via rpa-lib
@@ -9,26 +12,19 @@ local function GetPlayer(src)
     return nil
 end
 
--- Check if player is EMS
-local function IsEMS(src)
-    local Player = GetPlayer(src)
-    if not Player then return false end
-    
-    local job = Player.PlayerData.job
-    return job.name == 'ambulance' or job.name == 'ems'
-end
-
--- Check if player is on duty
-local function IsOnDuty(src)
-    return OnDuty[src] == true
+-- Helper function to check permissions
+local function CheckPermission(source, permConfig)
+    return exports['rpa-lib']:HasPermission(source, permConfig, 'ambulance')
 end
 
 -- Toggle Duty
 RegisterNetEvent('rpa-ambulance:server:toggleDuty', function()
     local src = source
     
-    if not IsEMS(src) then
-        exports['rpa-lib']:Notify(src, "You are not EMS", "error")
+    -- Check if player has ambulance job
+    local hasPerm, reason = CheckPermission(src, { jobs = {'ambulance', 'ems'} })
+    if not hasPerm then
+        exports['rpa-lib']:Notify(src, reason or "You are not EMS", "error")
         return
     end
     
@@ -47,14 +43,16 @@ end)
 RegisterNetEvent('rpa-ambulance:server:revivePlayer', function(targetId)
     local src = source
     
-    if not IsEMS(src) then
-        exports['rpa-lib']:Notify(src, "You are not EMS", "error")
-        return
-    end
+    -- Check for admin override first
+    local hasOverride = CheckPermission(src, Config.ReviveOverridePermissions)
     
-    if not IsOnDuty(src) then
-        exports['rpa-lib']:Notify(src, "You must be on duty to revive players", "error")
-        return
+    -- If no override, check normal revive permissions
+    if not hasOverride then
+        local hasPerm, reason = CheckPermission(src, Config.RevivePermissions)
+        if not hasPerm then
+            exports['rpa-lib']:Notify(src, reason or "No permission to revive", "error")
+            return
+        end
     end
     
     local TargetPlayer = GetPlayer(targetId)
@@ -95,13 +93,9 @@ end)
 RegisterNetEvent('rpa-ambulance:server:healPlayer', function(targetId, healAmount)
     local src = source
     
-    if not IsEMS(src) then
-        exports['rpa-lib']:Notify(src, "You are not EMS", "error")
-        return
-    end
-    
-    if not IsOnDuty(src) then
-        exports['rpa-lib']:Notify(src, "You must be on duty", "error")
+    local hasPerm, reason = CheckPermission(src, Config.RevivePermissions)
+    if not hasPerm then
+        exports['rpa-lib']:Notify(src, reason or "No permission", "error")
         return
     end
     
@@ -110,12 +104,73 @@ RegisterNetEvent('rpa-ambulance:server:healPlayer', function(targetId, healAmoun
     exports['rpa-lib']:Notify(src, "Player healed", "success")
 end)
 
+-- Admin Commands
+RegisterCommand('emshire', function(source, args, rawCommand)
+    local src = source
+    
+    local hasPerm, reason = CheckPermission(src, Config.AdminPermissions)
+    if not hasPerm then
+        exports['rpa-lib']:Notify(src, reason or "No permission", "error")
+        return
+    end
+    
+    local targetId = tonumber(args[1])
+    if not targetId then
+        exports['rpa-lib']:Notify(src, "Usage: /emshire [playerID]", "error")
+        return
+    end
+    
+    local Framework = exports['rpa-lib']:GetFramework()
+    local TargetPlayer = Framework.Functions.GetPlayer(targetId)
+    if not TargetPlayer then
+        exports['rpa-lib']:Notify(src, "Player not found", "error")
+        return
+    end
+    
+    TargetPlayer.Functions.SetJob('ambulance', 0)
+    exports['rpa-lib']:Notify(src, "Player hired to EMS", "success")
+    exports['rpa-lib']:Notify(targetId, "You have been hired to EMS", "success")
+end, false)
+
+RegisterCommand('emsfire', function(source, args, rawCommand)
+    local src = source
+    
+    local hasPerm, reason = CheckPermission(src, Config.AdminPermissions)
+    if not hasPerm then
+        exports['rpa-lib']:Notify(src, reason or "No permission", "error")
+        return
+    end
+    
+    local targetId = tonumber(args[1])
+    if not targetId then
+        exports['rpa-lib']:Notify(src, "Usage: /emsfire [playerID]", "error")
+        return
+    end
+    
+    local Framework = exports['rpa-lib']:GetFramework()
+    local TargetPlayer = Framework.Functions.GetPlayer(targetId)
+    if not TargetPlayer then
+        exports['rpa-lib']:Notify(src, "Player not found", "error")
+        return
+    end
+    
+    TargetPlayer.Functions.SetJob('unemployed', 0)
+    exports['rpa-lib']:Notify(src, "Player fired from EMS", "success")
+    exports['rpa-lib']:Notify(targetId, "You have been fired from EMS", "error")
+end, false)
+
 -- Cleanup on player drop
 AddEventHandler('playerDropped', function()
     local src = source
     OnDuty[src] = nil
 end)
 
--- Exports
-exports('IsEMS', IsEMS)
+-- Exports for other resources
+exports('IsEMS', function(src)
+    return CheckPermission(src, { jobs = {'ambulance', 'ems'} })
+end)
+
+exports('IsOnDuty', function(src)
+    return OnDuty[src] == true
+end)
 exports('IsOnDuty', IsOnDuty)
