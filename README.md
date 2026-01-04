@@ -19,6 +19,15 @@
 - 💉 **Revive Mechanic** - CPR animation and resurrection
 - 🩹 **Healing** - Treat wounds on nearby players
 - 🚑 **Vehicle Garage** - Spawn ambulances
+- 🔐 **Permission System** - Role-based access control
+
+---
+
+## 📦 Dependencies
+
+- `rpa-lib` (Required)
+- `rpa-dispatch` (Recommended)
+- `ox_target` or `qb-target` (Recommended)
 
 ---
 
@@ -28,14 +37,13 @@
 2. Extract to your `resources` folder
 3. Add to `server.cfg`:
    ```cfg
+   ensure rpa-lib
    ensure rpa-ambulance
    ```
 
 ---
 
 ## ⚙️ Configuration
-
-Configure hospitals in `config.lua`:
 
 ```lua
 Config.Hospitals = {
